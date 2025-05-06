@@ -181,27 +181,32 @@ function checkHazards() {
   // Data hazard detection (RAW - Read After Write)
   if (pipelineStages.id.length > 0) {
     const idInst = pipelineStages.id[0];
-
-    // Tüm aşamalardaki yazmaçları kontrol et
+    
+    // ID aşamasındaki komutun kaynak yazmaçlarını belirle
+    const src1 = idInst.src1;
+    const src2 = idInst.src2;
+    
+    // EX, MEM ve WB aşamalarındaki komutları kontrol et
     const exInst = pipelineStages.ex.length > 0 ? pipelineStages.ex[0] : null;
     const memInst = pipelineStages.mem.length > 0 ? pipelineStages.mem[0] : null;
-    const wbInst = pipelineStages.wb.length > 0 ? pipelineStages.wb[0] : null;
-
+    
     // EX aşamasındaki yazmaç bağımlılıkları
-    if (exInst && exInst.dest && 
-        (idInst.src1 === exInst.dest || (idInst.src2 === exInst.dest && idInst.src2 !== undefined))) {
-      return true;
+    if (exInst && exInst.dest && exInst.dest !== "x0") {
+      if (src1 === exInst.dest || (src2 === exInst.dest && src2 !== undefined)) {
+        return true;
+      }
     }
 
-    // MEM aşamasındaki yazmaç bağımlılıkları - sadece LW komutu için
-    if (memInst && memInst.dest && memInst.type === "LW" && 
-        (idInst.src1 === memInst.dest || (idInst.src2 === memInst.dest && idInst.src2 !== undefined))) {
-      return true;
+    // MEM aşamasındaki yazmaç bağımlılıkları - LW komutu için bağımlılık kontrolü
+    if (memInst && memInst.dest && memInst.dest !== "x0" && memInst.type === "LW") {
+      if (src1 === memInst.dest || (src2 === memInst.dest && src2 !== undefined)) {
+        return true;
+      }
     }
     
-    // WB aşamasındaki hazardlar - genellikle bu aşamada hazard olmaz
-    // çünkü yazmaca yazma aşaması tamamlanmış olur
-    return false;
+    // Not: WB aşamasındaki hazard kontrolünü kaldırdık çünkü Write Back aşamasında
+    // yazmaç değeri döngünün başında güncellenir, bu nedenle ID aşamasında
+    // doğru değer okunabilir
   }
 
   return false;
@@ -216,35 +221,35 @@ function step() {
     const inst = pipelineStages.wb.shift();
     completedInstructions.push(inst);
 
-    // Actually perform the operation (if not done in MEM)
+    // Yazmaç güncelleme işlemleri
     if (inst.type === "ADD") {
       registers[inst.dest] = registers[inst.src1] + registers[inst.src2];
     } else if (inst.type === "SUB") {
       registers[inst.dest] = registers[inst.src1] - registers[inst.src2];
     } else if (inst.type === "LW") {
+      // LW komutunun sonucu MEM aşamasında memory'den okunur, WB aşamasında yazmaça yazılır
+      // Hazard tespiti için gerçek değeri burada atayalım
       registers[inst.dest] = memory[inst.memOffset];
     } else if (inst.type === "ADDI") {
       registers[inst.dest] = registers[inst.src1] + inst.imm;
     }
-    // SW was already performed in MEM stage
+    
+    // x0 yazmaç değeri her zaman 0 olmalı
     registers["x0"] = 0;
   }
 
- // MEM stage -> WB
- if (pipelineStages.mem.length > 0) {
-  const inst = pipelineStages.mem.shift();
-  pipelineStages.wb.push(inst);
-
-  // Perform memory operations - düzeltilmiş bellek erişimi
-  if (inst.type === "SW") {
-    memory[inst.memOffset] = registers[inst.src2];
+  // MEM stage -> WB
+  if (pipelineStages.mem.length > 0) {
+    const inst = pipelineStages.mem.shift();
+    
+    // SW komutu için bellek yazma işlemi MEM aşamasında gerçekleşir
+    if (inst.type === "SW") {
+      memory[inst.memOffset] = registers[inst.src2];
+    }
+    
+    // Komutu WB aşamasına ilerlet
+    pipelineStages.wb.push(inst);
   }
-  if (inst.type === "LW") {
-    // Düzeltilmiş bellek erişimi - memOffset doğrudan indeks olarak kullanılıyor
-    registers[inst.dest] = memory[inst.memOffset];
-    registers["x0"] = 0;
-  }
-}
 
   // EX stage -> MEM
   if (pipelineStages.ex.length > 0) {
@@ -290,13 +295,13 @@ function reset() {
   completedInstructions = [];
   cycleCount = 0;
 
-  // Reset registers to default values - daha kısa kod
+  // Reset registers to default values
   const defaultRegValues = [0, 5, 200, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   for (let i = 0; i <= 11; i++) {
     registers[`x${i}`] = defaultRegValues[i];
   }
 
-  // Reset memory - daha kısa kod
+  // Reset memory
   for (let i = 0; i < 8; i++) {
     memory[i] = (i + 1) * 100;
   }
@@ -464,9 +469,12 @@ function addCustomInstruction() {
   instructionQueue.push(newInst);
   updateUI();
 }
+
+// Overlay'e tıklama işlemi - formu kapat
 document.getElementById("form-overlay").addEventListener("click", function() {
   document.getElementById("instruction-form").style.display = "none";
   document.getElementById("form-overlay").style.display = "none";
 });
+
 // Initialize UI
 updateUI();
