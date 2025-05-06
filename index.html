@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RISC-V Mikroişlemci Pipeline Simülatörü</title>
+  <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+  <div class="overlay" id="form-overlay"></div>
+  <div class="container">
+    <h1>RISC-V Mikroişlemci Pipeline Simülatörü</h1>
+
+    <div class="controls">
+
+      <div id="instruction-form" style="display: none;">
+        <h3 style="margin-top: 0">Yeni Komut Ekle</h3>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 10px">
+          <div style="flex: 1">
+            <label for="inst-type">Komut Tipi:</label>
+            <select id="inst-type" style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #e2e8f0;
+                  ">
+              <option value="ADD">ADD</option>
+              <option value="SUB">SUB</option>
+              <option value="LW">LW</option>
+              <option value="SW">SW</option>
+              <option value="ADDI">ADDI</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ADD ve SUB için form alanları -->
+        <div id="r-type-fields" class="inst-fields">
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <div style="flex: 1">
+              <label for="r-dest">Hedef Yazmaç:</label>
+              <select id="r-dest" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="r-src1">Kaynak Yazmaç 1:</label>
+              <select id="r-src1" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="r-src2">Kaynak Yazmaç 2:</label>
+              <select id="r-src2" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- LW için form alanları -->
+        <div id="lw-fields" class="inst-fields" style="display: none">
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <div style="flex: 1">
+              <label for="lw-dest">Hedef Yazmaç:</label>
+              <select id="lw-dest" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="lw-offset">Offset (Bayt):</label>
+              <select id="lw-offset" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="0">0</option>
+                <option value="4">4</option>
+                <option value="8">8</option>
+                <option value="12">12</option>
+                <option value="16">16</option>
+                <option value="20">20</option>
+                <option value="24">24</option>
+                <option value="28">28</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="lw-src">Baz Yazmaç:</label>
+              <select id="lw-src" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- SW için form alanları -->
+        <div id="sw-fields" class="inst-fields" style="display: none">
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <div style="flex: 1">
+              <label for="sw-src2">Kaynak Yazmaç:</label>
+              <select id="sw-src2" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="sw-offset">Offset (Bayt):</label>
+              <select id="sw-offset" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="0">0</option>
+                <option value="4">4</option>
+                <option value="8">8</option>
+                <option value="12">12</option>
+                <option value="16">16</option>
+                <option value="20">20</option>
+                <option value="24">24</option>
+                <option value="28">28</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="sw-src1">Baz Yazmaç:</label>
+              <select id="sw-src1" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                  ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADDI için form alanları -->
+        <div id="addi-fields" class="inst-fields" style="display: none">
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <div style="flex: 1">
+              <label for="addi-dest">Hedef Yazmaç:</label>
+              <select id="addi-dest" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="addi-src">Kaynak Yazmaç:</label>
+              <select id="addi-src" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    ">
+                <option value="x0">x0 (zero)</option>
+                <option value="x1">x1 (ra)</option>
+                <option value="x2">x2 (sp)</option>
+                <option value="x3">x3 (gp)</option>
+                <option value="x4">x4 (tp)</option>
+                <option value="x5">x5 (t0)</option>
+                <option value="x6">x6 (t1)</option>
+                <option value="x7">x7 (t2)</option>
+                <option value="x8">x8 (s0/fp)</option>
+                <option value="x9">x9 (s1)</option>
+                <option value="x10">x10 (a0)</option>
+                <option value="x11">x11 (a1)</option>
+              </select>
+            </div>
+            <div style="flex: 1">
+              <label for="addi-imm">Sabit Değer:</label>
+              <input type="number" id="addi-imm" style="
+                    width: 100%;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #e2e8f0;
+                    " min="0" max="100" value="10" />
+            </div>
+          </div>
+        </div>
+
+        <div style="
+              display: flex;
+              justify-content: space-between;
+              margin-top: 15px;
+              ">
+          <button id="cancel-inst-btn" style="
+                padding: 8px 16px;
+                background-color: #e2e8f0;
+                color: #4a5568;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                ">
+            İptal
+          </button>
+          <button id="add-inst-btn" style="
+                padding: 8px 16px;
+                background-color: #48bb78;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                ">
+            Ekle
+          </button>
+        </div>
+      </div>
+
+      <button id="step-btn">Adım</button>
+      <button id="reset-btn">Sıfırla</button>
+      <button id="add-instruction-btn">Yeni Komut Ekle</button>
+    </div>
+
+    <div class="clock-cycles">Çevrim: <span id="cycle-count">0</span></div>
+
+    <div class="pipeline">
+      <div class="stage-container">
+        <div class="stage-label">IF</div>
+        <div class="pipeline-grid" id="if-stage"></div>
+      </div>
+      <div class="stage-container">
+        <div class="stage-label">ID</div>
+        <div class="pipeline-grid" id="id-stage"></div>
+      </div>
+      <div class="stage-container">
+        <div class="stage-label">EX</div>
+        <div class="pipeline-grid" id="ex-stage"></div>
+      </div>
+      <div class="stage-container">
+        <div class="stage-label">MEM</div>
+        <div class="pipeline-grid" id="mem-stage"></div>
+      </div>
+      <div class="stage-container">
+        <div class="stage-label">WB</div>
+        <div class="pipeline-grid" id="wb-stage"></div>
+      </div>
+    </div>
+
+    <div id="hazard-display"></div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #48bb78"></div>
+        <div>ADD</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #4299e1"></div>
+        <div>SUB</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #ed8936"></div>
+        <div>LW</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #805ad5"></div>
+        <div>SW</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #667eea"></div>
+        <div>ADDI</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: #f56565"></div>
+        <div>HAZARD</div>
+      </div>
+    </div>
+
+    <div class="tab-container">
+      <div class="tab-buttons">
+        <button class="tab-button active" data-tab="registers">
+          Yazmaçlar
+        </button>
+        <button class="tab-button" data-tab="memory">Bellek</button>
+        <button class="tab-button" data-tab="completed">
+          Tamamlanan Komutlar
+        </button>
+        <button class="tab-button" data-tab="info">Bilgi</button>
+      </div>
+
+      <div class="tab-content">
+        <div class="tab-pane active" id="registers-tab">
+          <div class="registers">
+            <div class="register">
+              <div class="register-name">x0 (zero)</div>
+              <div class="register-value" id="x0">0</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x1 (ra)</div>
+              <div class="register-value" id="x1">5</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x2 (sp)</div>
+              <div class="register-value" id="x2">200</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x3 (gp)</div>
+              <div class="register-value" id="x3">15</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x4 (tp)</div>
+              <div class="register-value" id="x4">20</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x5 (t0)</div>
+              <div class="register-value" id="x5">25</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x6 (t1)</div>
+              <div class="register-value" id="x6">30</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x7 (t2)</div>
+              <div class="register-value" id="x7">35</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x8 (s0/fp)</div>
+              <div class="register-value" id="x8">40</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x9 (s1)</div>
+              <div class="register-value" id="x9">45</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x10 (a0)</div>
+              <div class="register-value" id="x10">50</div>
+            </div>
+            <div class="register">
+              <div class="register-name">x11 (a1)</div>
+              <div class="register-value" id="x11">55</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="memory-tab">
+          <div class="memory-view">
+            <h3>Bellek</h3>
+            <div class="memory-grid">
+              <div class="memory-cell">
+                <div class="memory-address">0x00</div>
+                <div class="memory-value" id="mem-0">100</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x04</div>
+                <div class="memory-value" id="mem-1">200</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x08</div>
+                <div class="memory-value" id="mem-2">300</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x0C</div>
+                <div class="memory-value" id="mem-3">400</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x10</div>
+                <div class="memory-value" id="mem-4">500</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x14</div>
+                <div class="memory-value" id="mem-5">600</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x18</div>
+                <div class="memory-value" id="mem-6">700</div>
+              </div>
+              <div class="memory-cell">
+                <div class="memory-address">0x1C</div>
+                <div class="memory-value" id="mem-7">800</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="completed-tab">
+          <div class="completed-instructions">
+            <h3>Tamamlanan Komutlar</h3>
+            <div id="completed-list"></div>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="info-tab">
+          <div class="info">
+            <h3>RISC-V Pipeline Aşamaları:</h3>
+            <p>
+              <strong>IF (Instruction Fetch):</strong> İşlemci, program
+              sayacının (PC) gösterdiği adresten komut alınır.
+            </p>
+            <p>
+              <strong>ID (Instruction Decode):</strong> Komut çözümlenir,
+              yazmaçlar okunur ve kontrol sinyalleri üretilir.
+            </p>
+            <p>
+              <strong>EX (Execute):</strong> ALU işlemleri gerçekleştirilir
+              (toplama, çıkarma, mantıksal işlemler vb.).
+            </p>
+            <p>
+              <strong>MEM (Memory Access):</strong> Gerekirse bellekten
+              okuma/yazma işlemleri yapılır.
+            </p>
+            <p>
+              <strong>WB (Write Back):</strong> İşlem sonuçları yazmaçlara
+              geri yazılır.
+            </p>
+
+            <h3>RISC-V Komut Tipleri:</h3>
+            <p>
+              <strong>R-type:</strong> Yazmaca yazmaca işlemler (ADD, SUB,
+              AND, OR, XOR)
+            </p>
+            <p>
+              <strong>I-type:</strong> Dolaysız (immediate) değerli işlemler
+              (ADDI, SLLI, LW)
+            </p>
+            <p>
+              <strong>S-type:</strong> Belleğe yazma işlemleri (SW, SH, SB)
+            </p>
+            <p><strong>B-type:</strong> Dallanma işlemleri (BEQ, BNE, BLT)</p>
+            <p>
+              <strong>U-type:</strong> Üst dolaysız (upper immediate) işlemler
+              (LUI, AUIPC)
+            </p>
+            <p><strong>J-type:</strong> Atlama işlemleri (JAL)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="main.js"></script> 
+</body>
+
+</html>
