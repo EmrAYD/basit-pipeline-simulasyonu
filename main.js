@@ -72,6 +72,8 @@ const registers = {
 };
 
 const memory = [100, 200, 300, 400, 500, 600, 700, 800];
+const DEFAULT_REG_VALUES = [0, 5, 200, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+const DEFAULT_MEM_VALUES = [100, 200, 300, 400, 500, 600, 700, 800];
 
 let instructionQueue = [...instructions];
 let pipelineStages = {
@@ -83,7 +85,6 @@ let pipelineStages = {
 };
 let completedInstructions = [];
 let cycleCount = 0;
-let inFlight = {};
 
 // Tab handling
 const tabButtons = document.querySelectorAll(".tab-button");
@@ -113,7 +114,7 @@ function updateUI() {
       instEl.className = "instruction";
       instEl.style.backgroundColor = inst.stall ? "#f56565" : inst.color;
       instEl.style.width = "100%"; // Genişlik %100 olarak ayarlandı
-      
+
       // Komut metnini daha iyi göstermek için
       const textEl = document.createElement("span");
       textEl.textContent = inst.text;
@@ -121,7 +122,7 @@ function updateUI() {
       textEl.style.overflow = "hidden";
       textEl.style.textOverflow = "ellipsis";
       instEl.appendChild(textEl);
-      
+
       stageEl.appendChild(instEl);
     });
   }
@@ -178,38 +179,18 @@ function updateUI() {
 }
 
 function checkHazards() {
-  // Data hazard detection (RAW - Read After Write)
-  if (pipelineStages.id.length > 0) {
-    const idInst = pipelineStages.id[0];
-    
-    // ID aşamasındaki komutun kaynak yazmaçlarını belirle
-    const src1 = idInst.src1;
-    const src2 = idInst.src2;
-    
-    // EX, MEM ve WB aşamalarındaki komutları kontrol et
-    const exInst = pipelineStages.ex.length > 0 ? pipelineStages.ex[0] : null;
-    const memInst = pipelineStages.mem.length > 0 ? pipelineStages.mem[0] : null;
-    
-    // EX aşamasındaki yazmaç bağımlılıkları
-    if (exInst && exInst.dest && exInst.dest !== "x0") {
-      if (src1 === exInst.dest || (src2 === exInst.dest && src2 !== undefined)) {
-        return true;
-      }
-    }
+  if (pipelineStages.id.length === 0) return false;
+  const idInst = pipelineStages.id[0];
+  const src1 = idInst.src1;
+  let src2 = (idInst.type === "SW") ? idInst.src2 : idInst.src2 || null;
 
-    // MEM aşamasındaki yazmaç bağımlılıkları - LW komutu için bağımlılık kontrolü
-    if (memInst && memInst.dest && memInst.dest !== "x0" && memInst.type === "LW") {
-      if (src1 === memInst.dest || (src2 === memInst.dest && src2 !== undefined)) {
-        return true;
-      }
-    }
-    
-    // Not: WB aşamasındaki hazard kontrolünü kaldırdık çünkü Write Back aşamasında
-    // yazmaç değeri döngünün başında güncellenir, bu nedenle ID aşamasında
-    // doğru değer okunabilir
-  }
-
-  return false;
+  // EX, MEM, WB aşamalarındaki komutları kontrol et
+  const stagesToCheck = [...pipelineStages.ex, ...pipelineStages.mem];
+  
+  return stagesToCheck.some(inst => {
+    if (!inst.dest || inst.dest === "x0") return false;
+    return inst.dest === src1 || inst.dest === src2;
+  });
 }
 
 function step() {
@@ -222,31 +203,29 @@ function step() {
     completedInstructions.push(inst);
 
     // Yazmaç güncelleme işlemleri
-    if (inst.type === "ADD") {
-      registers[inst.dest] = registers[inst.src1] + registers[inst.src2];
-    } else if (inst.type === "SUB") {
-      registers[inst.dest] = registers[inst.src1] - registers[inst.src2];
-    } else if (inst.type === "LW") {
-      // LW komutunun sonucu MEM aşamasında memory'den okunur, WB aşamasında yazmaça yazılır
-      // Hazard tespiti için gerçek değeri burada atayalım
-      registers[inst.dest] = memory[inst.memOffset];
-    } else if (inst.type === "ADDI") {
-      registers[inst.dest] = registers[inst.src1] + inst.imm;
+    if (inst.dest && inst.dest !== "x0") { // x0 yazmaç değeri her zaman 0 olmalı
+      if (inst.type === "ADD") {
+        registers[inst.dest] = registers[inst.src1] + registers[inst.src2];
+      } else if (inst.type === "SUB") {
+        registers[inst.dest] = registers[inst.src1] - registers[inst.src2];
+      } else if (inst.type === "LW") {
+        // LW komutunun sonucu MEM aşamasında memory'den okunur, WB aşamasında yazmaça yazılır
+        registers[inst.dest] = memory[inst.memOffset];
+      } else if (inst.type === "ADDI") {
+        registers[inst.dest] = registers[inst.src1] + inst.imm;
+      }
     }
-    
-    // x0 yazmaç değeri her zaman 0 olmalı
-    registers["x0"] = 0;
   }
 
   // MEM stage -> WB
   if (pipelineStages.mem.length > 0) {
     const inst = pipelineStages.mem.shift();
-    
+
     // SW komutu için bellek yazma işlemi MEM aşamasında gerçekleşir
     if (inst.type === "SW") {
       memory[inst.memOffset] = registers[inst.src2];
     }
-    
+
     // Komutu WB aşamasına ilerlet
     pipelineStages.wb.push(inst);
   }
@@ -273,11 +252,9 @@ function step() {
   }
 
   // IF stage -> ID (if no instruction in ID or if ID is not stalled)
-  if (pipelineStages.if.length > 0) {
-    if (pipelineStages.id.length === 0 || !pipelineStages.id[0].stall) {
-      const inst = pipelineStages.if.shift();
-      pipelineStages.id.push(inst);
-    }
+  if (pipelineStages.if.length > 0 && (pipelineStages.id.length === 0 || !pipelineStages.id[0].stall)) {
+    const inst = pipelineStages.if.shift();
+    pipelineStages.id.push(inst);
   }
 
   // New instruction -> IF
@@ -296,14 +273,13 @@ function reset() {
   cycleCount = 0;
 
   // Reset registers to default values
-  const defaultRegValues = [0, 5, 200, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   for (let i = 0; i <= 11; i++) {
-    registers[`x${i}`] = defaultRegValues[i];
+    registers[`x${i}`] = DEFAULT_REG_VALUES[i];
   }
 
   // Reset memory
   for (let i = 0; i < 8; i++) {
-    memory[i] = (i + 1) * 100;
+    memory[i] = DEFAULT_MEM_VALUES[i];
   }
 
   // Form ve overlay'i gizle (eğer açıksa)
@@ -311,6 +287,52 @@ function reset() {
   document.getElementById("form-overlay").style.display = "none";
 
   updateUI();
+}
+
+// Form değerlerinin geçerliliğini kontrol eden yardımcı fonksiyon
+function validateFormData(instType) {
+  let isValid = true;
+  let errorMessage = "";
+
+  if (instType === "ADD" || instType === "SUB") {
+    const dest = document.getElementById("r-dest").value;
+    const src1 = document.getElementById("r-src1").value;
+    const src2 = document.getElementById("r-src2").value;
+    
+    if (!dest || !src1 || !src2) {
+      isValid = false;
+      errorMessage = "Lütfen tüm yazmaçları seçin.";
+    }
+  } else if (instType === "LW") {
+    const dest = document.getElementById("lw-dest").value;
+    const offset = document.getElementById("lw-offset").value;
+    const src = document.getElementById("lw-src").value;
+    
+    if (!dest || offset === null || !src) {
+      isValid = false;
+      errorMessage = "Lütfen tüm alanları doldurun.";
+    }
+  } else if (instType === "SW") {
+    const src2 = document.getElementById("sw-src2").value;
+    const offset = document.getElementById("sw-offset").value;
+    const src1 = document.getElementById("sw-src1").value;
+    
+    if (!src1 || !src2 || offset === null) {
+      isValid = false;
+      errorMessage = "Lütfen tüm alanları doldurun.";
+    }
+  } else if (instType === "ADDI") {
+    const dest = document.getElementById("addi-dest").value;
+    const src = document.getElementById("addi-src").value;
+    const imm = document.getElementById("addi-imm").value;
+    
+    if (!dest || !src || imm === "" || isNaN(parseInt(imm))) {
+      isValid = false;
+      errorMessage = "Lütfen tüm alanları geçerli değerlerle doldurun.";
+    }
+  }
+
+  return { isValid, errorMessage };
 }
 
 // Event Listeners
@@ -361,9 +383,6 @@ document
   .getElementById("add-inst-btn")
   .addEventListener("click", function () {
     addCustomInstruction();
-    // Formu ve overlay'i gizle
-    document.getElementById("instruction-form").style.display = "none";
-    document.getElementById("form-overlay").style.display = "none";
   });
 
 // Komut tipi form alanlarını başlangıçta göster
@@ -372,6 +391,14 @@ document.getElementById("r-type-fields").style.display = "block";
 // Özel komut ekleme fonksiyonu
 function addCustomInstruction() {
   const instType = document.getElementById("inst-type").value;
+  
+  // Form değerlerini doğrula
+  const validation = validateFormData(instType);
+  if (!validation.isValid) {
+    alert(validation.errorMessage);
+    return;
+  }
+  
   let newInst;
   const id =
     instructions.length +
@@ -416,13 +443,22 @@ function addCustomInstruction() {
     const offset = parseInt(document.getElementById("lw-offset").value);
     const srcReg = document.getElementById("lw-src").value;
 
+    // Bellek indeksini offset değerine göre hesapla
+    const memIndex = Math.floor(offset / 4);
+    
+    // Geçerli bir bellek indeksi kontrolü
+    if (memIndex < 0 || memIndex >= memory.length) {
+      alert(`Bellek erişim hatası: Offset ${offset} (indeks ${memIndex}) geçerli bir bellek konumu değil.`);
+      return;
+    }
+
     newInst = {
       id,
       type: "LW",
       text: `lw ${destReg}, ${offset}(${srcReg})`,
       src1: srcReg,
       dest: destReg,
-      memOffset: offset / 4, // 4 bayt = 1 word, yani offset/4 indeksi verir
+      memOffset: memIndex,
       color: "#ed8936",
       stall: false,
       position: 0,
@@ -431,6 +467,15 @@ function addCustomInstruction() {
     const srcReg2 = document.getElementById("sw-src2").value;
     const offset = parseInt(document.getElementById("sw-offset").value);
     const srcReg1 = document.getElementById("sw-src1").value;
+    
+    // Bellek indeksini offset değerine göre hesapla
+    const memIndex = Math.floor(offset / 4);
+    
+    // Geçerli bir bellek indeksi kontrolü
+    if (memIndex < 0 || memIndex >= memory.length) {
+      alert(`Bellek erişim hatası: Offset ${offset} (indeks ${memIndex}) geçerli bir bellek konumu değil.`);
+      return;
+    }
 
     newInst = {
       id,
@@ -438,7 +483,7 @@ function addCustomInstruction() {
       text: `sw ${srcReg2}, ${offset}(${srcReg1})`,
       src1: srcReg1,
       src2: srcReg2,
-      memOffset: offset / 4, // 4 bayt = 1 word, yani offset/4 indeksi verir
+      memOffset: memIndex,
       color: "#805ad5",
       stall: false,
       position: 0,
@@ -447,11 +492,6 @@ function addCustomInstruction() {
     const destReg = document.getElementById("addi-dest").value;
     const srcReg = document.getElementById("addi-src").value;
     const imm = parseInt(document.getElementById("addi-imm").value);
-
-    if (!destReg || !srcReg || isNaN(imm)) {
-      alert("Lütfen tüm alanları geçerli değerlerle doldurun.");
-      return;
-    }
 
     newInst = {
       id,
@@ -467,11 +507,16 @@ function addCustomInstruction() {
   }
 
   instructionQueue.push(newInst);
+  
+  // Formu ve overlay'i gizle
+  document.getElementById("instruction-form").style.display = "none";
+  document.getElementById("form-overlay").style.display = "none";
+  
   updateUI();
 }
 
 // Overlay'e tıklama işlemi - formu kapat
-document.getElementById("form-overlay").addEventListener("click", function() {
+document.getElementById("form-overlay").addEventListener("click", function () {
   document.getElementById("instruction-form").style.display = "none";
   document.getElementById("form-overlay").style.display = "none";
 });
