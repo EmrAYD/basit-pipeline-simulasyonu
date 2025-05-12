@@ -238,6 +238,7 @@ button:hover {
   background-color: var(--danger);
   font-size: 0.85rem;
   animation: pulse 1.5s infinite;
+  text-align: center;
 }
 
 @keyframes pulse {
