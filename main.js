@@ -59,18 +59,18 @@ const instructions = [
 ];
 
 const registers = {
-  x0: 0, // zero (constant 0)
-  x1: 5, // ra (return address)
-  x2: 200, // sp (stack pointer)
-  x3: 15, // gp (global pointer)
-  x4: 20, // tp (thread pointer)
-  x5: 25, // t0 (temporary)
-  x6: 30, // t1 (temporary)
-  x7: 35, // t2 (temporary)
-  x8: 40, // s0/fp (saved/frame pointer)
-  x9: 45, // s1 (saved register)
-  x10: 50, // a0 (argument/return)
-  x11: 55, // a1 (argument/return)
+  x0: 0, // sıfır (sabit 0)
+  x1: 5, // ra (dönüş adresi)
+  x2: 200, // sp (yığın işaretçisi)
+  x3: 15, // gp (global işaretçi)
+  x4: 20, // tp (iş parçacığı işaretçisi)
+  x5: 25, // t0 (geçici)
+  x6: 30, // t1 (geçici)
+  x7: 35, // t2 (geçici)
+  x8: 40, // s0/fp (kaydedilen/çerçeve işaretçisi)
+  x9: 45, // s1 (kaydedilen yazmacı)
+  x10: 50, // a0 (argüman/dönüş)
+  x11: 55, // a1 (argüman/dönüş)
 };
 
 const memory = [100, 200, 300, 400, 500, 600, 700, 800];
@@ -88,45 +88,45 @@ let pipelineStages = {
 let completedInstructions = [];
 let cycleCount = 0;
 
-// Tab handling
+// Sekme işleme
 const tabButtons = document.querySelectorAll(".tab-button");
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    // Remove active class from all buttons and panes
+    // Tüm düğmelerden ve panellerden aktif sınıfını kaldır
     tabButtons.forEach((btn) => btn.classList.remove("active"));
     document
       .querySelectorAll(".tab-pane")
       .forEach((pane) => pane.classList.remove("active"));
 
-    // Add active class to clicked button and corresponding pane
+    // Tıklanan düğmeye ve ilgili panele aktif sınıfını ekle
     button.classList.add("active");
     const tabId = button.getAttribute("data-tab");
     document.getElementById(`${tabId}-tab`).classList.add("active");
   });
 });
 
-// Calculate memory index from byte offset
+// Bayt ofsetinden bellek indeksini hesapla
 function calculateMemoryIndex(offset) {
   return Math.floor(offset / 4);
 }
 
-// Improved forwarding value retrieval to prevent infinite recursion
+// Sonsuz özyinelemeyi önlemek için geliştirilmiş iletim değeri alma
 function getForwardedValue(registerName, depth = 0, maxDepth = 3) {
-  // Always return 0 for x0 register
+  // x0 yazmaç için her zaman 0 döndür
   if (registerName === "x0") return 0;
 
-  // Prevent infinite recursion by limiting depth
+  // Derinlik sınırını aşarak sonsuz özyinelemeyi önle
   if (depth >= maxDepth) {
     return registers[registerName];
   }
 
-  // Check EX stage (highest priority)
+  // EX aşamasını kontrol et (en yüksek öncelik)
   for (const inst of pipelineStages.ex) {
     if (inst.dest === registerName) {
-      // LW instructions don't have a value available in EX
+      // LW komutlarının EX aşamasında değeri yoktur
       if (inst.type === "LW") continue;
 
-      // Calculate result based on instruction type
+      // Komut tipine göre sonucu hesapla
       if (inst.type === "ADD") {
         return getForwardedValue(inst.src1, depth + 1, maxDepth) +
           getForwardedValue(inst.src2, depth + 1, maxDepth);
@@ -139,23 +139,23 @@ function getForwardedValue(registerName, depth = 0, maxDepth = 3) {
     }
   }
 
-  // Check MEM stage
+  // MEM aşamasını kontrol et
   for (const inst of pipelineStages.mem) {
     if (inst.dest === registerName) {
-      // Use pre-computed result if available
+      // Önceden hesaplanmış sonucu kullan (mevcutsa)
       if (inst.result !== undefined) {
         return inst.result;
       }
-      // Handle LW instructions - we can access memory at this stage
+      // LW komutlarını ele al - bu aşamada belleğe erişebiliriz
       else if (inst.type === "LW") {
         const memIndex = inst.memOffset;
         if (memIndex >= 0 && memIndex < memory.length) {
           return memory[memIndex];
         }
         console.error(`Bellek erişim hatası: Index ${memIndex} geçerli bir bellek konumu değil.`);
-        return 0; // Default value for invalid memory access
+        return 0; // Geçersiz bellek erişimi için varsayılan değer
       }
-      // Calculate result for other instructions
+      // Diğer komutlar için sonucu hesapla
       else if (inst.type === "ADD") {
         return getForwardedValue(inst.src1, depth + 1, maxDepth) +
           getForwardedValue(inst.src2, depth + 1, maxDepth);
@@ -168,14 +168,14 @@ function getForwardedValue(registerName, depth = 0, maxDepth = 3) {
     }
   }
 
-  // Check WB stage
+  // WB aşamasını kontrol et
   for (const inst of pipelineStages.wb) {
     if (inst.dest === registerName) {
-      // Use pre-computed result if available
+      // Önceden hesaplanmış sonucu kullan (mevcutsa)
       if (inst.result !== undefined) {
         return inst.result;
       }
-      // Calculate result for other instructions
+      // Diğer komutlar için sonucu hesapla
       else if (inst.type === "ADD") {
         return getForwardedValue(inst.src1, depth + 1, maxDepth) +
           getForwardedValue(inst.src2, depth + 1, maxDepth);
@@ -188,18 +188,18 @@ function getForwardedValue(registerName, depth = 0, maxDepth = 3) {
           return memory[memIndex];
         }
         console.error(`Bellek erişim hatası: Index ${memIndex} geçerli bir bellek konumu değil.`);
-        return 0; // Default value for invalid memory access
+        return 0; // Geçersiz bellek erişimi için varsayılan değer
       } else if (inst.type === "ADDI") {
         return getForwardedValue(inst.src1, depth + 1, maxDepth) + inst.imm;
       }
     }
   }
 
-  // If no forwarding source is found, return the current register value
+  // İletim kaynağı bulunamadıysa, mevcut yazmaç değerini döndür
   return registers[registerName];
 }
 
-// Improved hazard detection to handle all data hazards
+// Tüm veri bağımlılıklarını ele almak için geliştirilmiş bağımlılık tespiti
 function checkHazards() {
   if (pipelineStages.id.length === 0) return false;
 
@@ -207,24 +207,24 @@ function checkHazards() {
   const src1 = idInst.src1;
   const src2 = idInst.type === "SW" ? idInst.src2 : idInst.src2 || null;
 
-  // Check for load-use hazards specifically
-  // A load-use hazard occurs when a LW instruction is in EX stage
-  // and the next instruction in ID stage needs the loaded value
+  // Özellikle yükleme-kullanma bağımlılıklarını kontrol et
+  // Yükleme-kullanma bağımlılığı, bir LW komutu EX aşamasındayken
+  // ve ID aşamasındaki bir sonraki komut yüklenen değeri kullanıyorsa oluşur
   for (const inst of pipelineStages.ex) {
     if (inst.type === "LW") {
-      // If LW's destination matches any source register of ID instruction
+      // Eğer LW'nin hedefi, ID komutunun herhangi bir kaynak yazmacı ile eşleşiyorsa
       if (inst.dest === src1 || inst.dest === src2) {
-        return true; // Load-use hazard detected, stall required
+        return true; // Yükleme-kullanma bağımlılığı tespit edildi, duraklatma gerekli
       }
     }
   }
 
-  // No hazards that can't be handled by forwarding
+  // İletim mekanizması ile ele alınamayan bağımlılık yok
   return false;
 }
 
 function executeInstruction(inst) {
-  // Helper function to perform the actual computation based on instruction type
+  // Komut tipine göre gerçek hesaplamaları gerçekleştiren yardımcı fonksiyon
   if (inst.type === "ADD") {
     const src1Value = getForwardedValue(inst.src1);
     const src2Value = getForwardedValue(inst.src2);
@@ -243,19 +243,19 @@ function executeInstruction(inst) {
     console.error(`Bellek erişim hatası: Index ${inst.memOffset} geçerli bir bellek konumu değil.`);
     return 0;
   }
-  return 0; // Default return value
+  return 0; // Varsayılan dönüş değeri
 }
 
 function step() {
   cycleCount++;
 
-  // WB stage -> Completed
+  // WB aşaması -> Tamamlanan
   if (pipelineStages.wb.length > 0) {
     const inst = pipelineStages.wb.shift();
     completedInstructions.push(inst);
 
-    // Update registers
-    if (inst.dest && inst.dest !== "x0") { // x0 register should always be 0
+    // Yazmaçları güncelle
+    if (inst.dest && inst.dest !== "x0") { // x0 yazmacı her zaman 0 olmalıdır
       if (inst.result !== undefined) {
         registers[inst.dest] = Math.floor(inst.result);
       } else {
@@ -264,7 +264,7 @@ function step() {
     }
   }
 
-  // MEM stage -> WB
+  // MEM aşaması -> WB
   if (pipelineStages.mem.length > 0) {
     const inst = pipelineStages.mem.shift();
 
@@ -272,14 +272,14 @@ function step() {
     if (inst.type === "SW") {
       // Bellek sınırlarını kontrol et
       if (inst.memOffset >= 0 && inst.memOffset < memory.length) {
-        // Forwarding mekanizması ile src2 değerini al
+        // İletim mekanizması ile src2 değerini al
         const valueToStore = getForwardedValue(inst.src2);
         memory[inst.memOffset] = Math.floor(valueToStore);
       } else {
         console.error(`Bellek yazma hatası: İndeks ${inst.memOffset} geçerli bir bellek konumu değil.`);
       }
     }
-    // For LW instructions, compute the result now
+    // LW komutları için sonucu şimdi hesapla
     else if (inst.type === "LW") {
       if (inst.memOffset >= 0 && inst.memOffset < memory.length) {
         inst.result = memory[inst.memOffset];
@@ -292,11 +292,11 @@ function step() {
     pipelineStages.wb.push(inst);
   }
 
-  // EX stage -> MEM
+  // EX aşaması -> MEM
   if (pipelineStages.ex.length > 0) {
     const inst = pipelineStages.ex.shift();
 
-    // Calculate results in EX stage using forwarded values
+    // İletilmiş değerleri kullanarak EX aşamasında sonuçları hesapla
     if (inst.type === "ADD" || inst.type === "SUB" || inst.type === "ADDI") {
       inst.result = executeInstruction(inst);
     } else if (inst.type === "LW" || inst.type === "SW") {
@@ -310,38 +310,38 @@ function step() {
     pipelineStages.mem.push(inst);
   }
 
-  // Check for hazards
+  // Bağımlılıkları kontrol et
   const hazard = checkHazards();
 
-  // ID stage -> EX (if no hazard)
+  // ID aşaması -> EX (bağımlılık yoksa)
   if (pipelineStages.id.length > 0) {
     if (!hazard) {
       const inst = pipelineStages.id.shift();
       inst.stall = false;
       pipelineStages.ex.push(inst);
     } else {
-      // Mark instruction as stalled
+      // Komutu duraklatılmış olarak işaretle
       pipelineStages.id[0].stall = true;
     }
   }
 
-  // IF stage -> ID (if ID has no instruction or if ID is not stalled)
+  // IF aşaması -> ID (ID'de komut yoksa veya ID duraklatılmamışsa)
   if (pipelineStages.if.length > 0 && (pipelineStages.id.length === 0 || !pipelineStages.id[0].stall)) {
     const inst = pipelineStages.if.shift();
     pipelineStages.id.push(inst);
   }
 
-  // New instruction -> IF
+  // Yeni komut -> IF
   if (instructionQueue.length > 0 && pipelineStages.if.length === 0) {
     const inst = instructionQueue.shift();
-    pipelineStages.if.push({ ...inst }); // Clone the instruction to avoid reference issues
+    pipelineStages.if.push({ ...inst }); // Referans sorunlarını önlemek için komutu klonla
   }
 
   updateUI();
 }
 
 function updateUI() {
-  // Update pipeline visualization
+  // Pipeline görselleştirmesini güncelle
   for (const stage in pipelineStages) {
     const stageEl = document.getElementById(`${stage}-stage`);
     stageEl.innerHTML = "";
@@ -364,7 +364,7 @@ function updateUI() {
     });
   }
 
-  // Update registers - only update registers that have changed
+  // Yazmaçları güncelle - sadece değişen yazmaçları güncelle
   for (const reg in registers) {
     const regEl = document.getElementById(reg);
     if (regEl && regEl.textContent != registers[reg]) {
@@ -372,7 +372,7 @@ function updateUI() {
     }
   }
 
-  // Update memory - only update memory locations that have changed
+  // Belleği güncelle - sadece değişen bellek konumlarını güncelle
   memory.forEach((val, idx) => {
     const memEl = document.getElementById(`mem-${idx}`);
     if (memEl && memEl.textContent != val) {
@@ -380,10 +380,10 @@ function updateUI() {
     }
   });
 
-  // Update cycle count
+  // Çevrim sayısını güncelle
   document.getElementById("cycle-count").textContent = cycleCount;
 
-  // Update completed instructions (only append new ones)
+  // Tamamlanan komutları güncelle (sadece yenilerini ekle)
   const completedList = document.getElementById("completed-list");
   if (completedInstructions.length > completedList.children.length) {
     const newInst = completedInstructions[completedInstructions.length - 1];
@@ -393,7 +393,7 @@ function updateUI() {
     completedList.appendChild(instEl);
   }
 
-  // Update hazard display
+  // Bağımlılık göstergesini güncelle
   updateHazardDisplay();
 }
 
@@ -408,7 +408,7 @@ function updateHazardDisplay() {
   let hasHazard = false;
   let hasForwarding = false;
 
-  // Check for stalls in any stage
+  // Herhangi bir aşamada duraklatma olup olmadığını kontrol et
   for (const stage in pipelineStages) {
     pipelineStages[stage].forEach((inst) => {
       if (inst.stall) {
@@ -417,8 +417,8 @@ function updateHazardDisplay() {
     });
   }
 
-  // Check if forwarding is being used
-  // If there's an instruction in ID stage and its sources are targeted by instructions in EX, MEM or WB stages
+  // İletim mekanizmasının kullanılıp kullanılmadığını kontrol et
+  // ID aşamasında bir talimat varsa ve kaynakları EX, MEM veya WB aşamalarındaki komutlar tarafından hedefleniyorsa
   if (pipelineStages.id.length > 0) {
     const idInst = pipelineStages.id[0];
     const src1 = idInst.src1;
@@ -428,12 +428,12 @@ function updateHazardDisplay() {
     hasForwarding = stagesToCheck.some(inst => {
       if (!inst.dest || inst.dest === "x0") return false;
       return (inst.dest === src1 || inst.dest === src2) &&
-        // Exclude load-use hazard situations (where forwarding doesn't work)
+        // Yükleme-kullanma bağımlılık durumlarını hariç tut (iletim mekanizması çalışmaz)
         !(inst.type === "LW" && pipelineStages.ex.includes(inst));
     });
   }
 
-  // Display appropriate message based on hazard/forwarding status
+  // Bağımlılık/iletim durumuna göre uygun mesajı göster
   if (hasHazard) {
     hazardInfo.textContent = "Data Hazard Tespit Edildi! Stall uygulanıyor.";
     hazardInfo.style.color = "#f56565";
@@ -453,17 +453,17 @@ function reset() {
   completedInstructions = [];
   cycleCount = 0;
 
-  // Reset registers to default values
+  // Yazmaçları varsayılan değerlere sıfırla
   for (let i = 0; i <= 11; i++) {
     registers[`x${i}`] = DEFAULT_REG_VALUES[i];
   }
 
-  // Reset memory
+  // Belleği sıfırla
   for (let i = 0; i < 8; i++) {
     memory[i] = DEFAULT_MEM_VALUES[i];
   }
 
-  // Hide form and overlay (if open)
+  // Form ve overlay'i gizle (açıksa)
   document.getElementById("instruction-form").style.display = "none";
   document.getElementById("form-overlay").style.display = "none";
 
@@ -650,7 +650,7 @@ function addCustomInstruction() {
   updateUI();
 }
 
-// Event Listeners
+// Olay Dinleyicileri
 document.getElementById("step-btn").addEventListener("click", step);
 document.getElementById("reset-btn").addEventListener("click", reset);
 document.getElementById("add-instruction-btn").addEventListener("click", function () {
